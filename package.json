@@ -8,7 +8,9 @@
     "dev:api": "node server/index.js",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:migrate": "node scripts/migrate.js",
+    "db:init": "node scripts/init-db.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.1.0",

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, X, ArrowLeft, Paperclip, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getUsers, createTasks } from '../lib/api.js';
+import { getUsers, createTasks, getDepartments } from '../lib/api.js';
 import './CreateTask.css';
 
 const TASK_OPTIONS = [
@@ -37,7 +37,7 @@ const CreateTask = () => {
 
         const fetchAssignees = async () => {
             try {
-                const result = await getUsers();
+                const [result, deptResult] = await Promise.all([getUsers(), getDepartments()]);
                 const users = result.users.filter((u) => u.id !== (user?.id || 0));
 
                 let filteredResult = users;
@@ -49,19 +49,19 @@ const CreateTask = () => {
 
                 const userOptions = filteredResult.map((u) => ({
                     value: `user:${u.id}`,
-                    label: `${u.name} (${u.role === 'director' ? 'Direktur' : u.department})`,
+                    label: `${u.name} (${u.role === 'director' ? 'Direktur' : u.department || u.role})`,
                     type: 'user',
                     dept: u.department,
                     id: u.id,
                 }));
 
-                const deptOptions = [
-                    { value: 'dept:Finance', label: 'Departemen Keuangan', type: 'dept', dept: 'Finance' },
-                    { value: 'dept:Marketing', label: 'Departemen Pemasaran', type: 'dept', dept: 'Marketing' },
-                    { value: 'dept:IT', label: 'Departemen IT', type: 'dept', dept: 'IT' },
-                    { value: 'dept:HR', label: 'Departemen SDM', type: 'dept', dept: 'HR' },
-                    { value: 'dept:Ops', label: 'Departemen Operasional', type: 'dept', dept: 'Ops' }
-                ];
+                // Build dept options dynamically from DB
+                const deptOptions = deptResult.departments.map((dept) => ({
+                    value: `dept:${dept.name}`,
+                    label: dept.label,
+                    type: 'dept',
+                    dept: dept.name,
+                }));
 
                 if (user?.role === 'staff' || user?.role === 'staf') {
                     setAssignees([...userOptions]);
