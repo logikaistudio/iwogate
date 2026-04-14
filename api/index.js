@@ -6,26 +6,12 @@ import { setupRoleRoutes } from '../server/routes/roles.js';
 import { setupDepartmentRoutes } from '../server/routes/departments.js';
 import { setupTaskRoutes } from '../server/routes/tasks.js';
 import { initializeDatabase } from '../server/lib/setup.js';
+import { sql } from '../server/lib/db.js';
 
 const app = express();
 
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '10mb' }));
-
-// Initialize DB middleware (idempotent)
-let dbInitialized = false;
-app.use(async (req, res, next) => {
-  if (!dbInitialized) {
-    try {
-      console.log('Initializing database on Vercel...');
-      await initializeDatabase();
-      dbInitialized = true;
-    } catch (err) {
-      console.error('DB Init Error:', err);
-    }
-  }
-  next();
-});
 
 // Setup all routes
 setupAuthRoutes(app);
@@ -34,12 +20,30 @@ setupRoleRoutes(app);
 setupDepartmentRoutes(app);
 setupTaskRoutes(app);
 
-// Health check with DB status
+// Manual init route
+app.get('/api/admin/init-db', async (req, res) => {
+  try {
+    const result = await initializeDatabase();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Health check with DB ping
 app.get(['/api/health', '/health'], async (req, res) => {
+  let dbStatus = 'unknown';
+  try {
+    await sql`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (err) {
+    dbStatus = 'error: ' + err.message;
+  }
+
   res.json({ 
     success: true, 
     message: 'API is healthy', 
-    dbInitialized,
+    dbStatus,
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV
   });
@@ -65,4 +69,5 @@ app.use((err, req, res, next) => {
 });
 
 export default app;
+
 
