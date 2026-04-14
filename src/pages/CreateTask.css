@@ -243,3 +243,101 @@
     border-color: var(--primary);
     box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
 }
+
+/* Multi-Assignee Select */
+.multi-assignee-select {
+    position: relative;
+    width: 100%;
+    min-height: 42px;
+}
+
+.selected-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.5rem;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    min-height: 42px;
+}
+
+.selected-tags .placeholder {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 0.25rem;
+}
+
+.assignee-tag {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #eff6ff;
+    color: var(--primary);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.assignee-tag button {
+    background: transparent;
+    border: none;
+    color: var(--primary);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.multi-assignee-select:hover .assignee-dropdown {
+    display: block;
+}
+
+.assignee-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    max-height: 250px;
+    overflow-y: auto;
+    margin-top: 2px;
+}
+
+.dropdown-section {
+    padding: 0.5rem 0.75rem;
+    background: #f8fafc;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--secondary);
+    letter-spacing: 0.025em;
+    border-bottom: 1px solid var(--border);
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+    transition: background 0.1s;
+    font-size: 0.85rem;
+}
+
+.dropdown-item:hover {
+    background: #f1f5f9;
+}
+
+.dropdown-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}

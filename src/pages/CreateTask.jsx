@@ -16,7 +16,7 @@ const CreateTask = () => {
 
     // Task Rows State: [{ id, title, assigneeDesc, deadline, selectedTasks }]
     const [taskRows, setTaskRows] = useState([
-        { id: 1, title: '', assigneeDesc: '', deadline: '', selectedTasks: [] }
+        { id: 1, title: '', selectedAssignees: [], deadline: '', selectedTasks: [] }
     ]);
 
     const [desc, setDesc] = useState('');
@@ -103,7 +103,7 @@ const CreateTask = () => {
     };
 
     const addTaskRow = () => {
-        setTaskRows([...taskRows, { id: Date.now(), title: '', assigneeDesc: '', deadline: '', selectedTasks: [] }]);
+        setTaskRows([...taskRows, { id: Date.now(), title: '', selectedAssignees: [], deadline: '', selectedTasks: [] }]);
     };
 
     const removeTaskRow = (id) => {
@@ -129,13 +129,31 @@ const CreateTask = () => {
         }));
     };
 
+    const toggleAssignee = (rowId, assigneeValue) => {
+        setTaskRows(taskRows.map(r => {
+            if (r.id === rowId) {
+                const current = r.selectedAssignees || [];
+                const isSelected = current.includes(assigneeValue);
+                const next = isSelected 
+                    ? current.filter(v => v !== assigneeValue)
+                    : [...current, assigneeValue];
+                return { ...r, selectedAssignees: next };
+            }
+            return r;
+        }));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         // Basic validation
-        const invalidRow = taskRows.find(r => ((r.selectedTasks || []).length === 0 && !r.title) || !r.assigneeDesc || !r.deadline);
+        const invalidRow = taskRows.find(r => 
+            ((r.selectedTasks || []).length === 0 && !r.title) || 
+            (r.selectedAssignees || []).length === 0 || 
+            !r.deadline
+        );
         if (invalidRow) {
-            alert("Mohon lengkapi semua baris tugas (Pilih Tugas/Isi Judul, Penerima, Tenggat).");
+            alert("Mohon lengkapi semua baris tugas (Pilih Tugas/Isi Judul, Pilih Minimal 1 Penerima, Tenggat).");
             return;
         }
 
@@ -169,29 +187,33 @@ const CreateTask = () => {
                 }
             }
 
-            const payloadTasks = taskRows.map((row) => {
-                const assigneeOption = assignees.find((a) => a.value === row.assigneeDesc);
-                let assignedToDept = 'General';
-                let assignedToUserId = null;
-
-                if (assigneeOption) {
-                    assignedToDept = assigneeOption.dept;
-                    if (assigneeOption.type === 'user') {
-                        assignedToUserId = parseInt(assigneeOption.value.split(':')[1], 10);
-                    }
-                }
-
+            // Process multiple assignees per row
+            const payloadTasks = [];
+            taskRows.forEach((row) => {
                 let finalTitle = (row.selectedTasks || []).join(', ');
                 if (row.title) {
                     finalTitle = finalTitle ? `${finalTitle} - ${row.title}` : row.title;
                 }
 
-                return {
-                    title: finalTitle,
-                    assigned_to_dept: assignedToDept,
-                    assigned_to_user_id: assignedToUserId,
-                    due_date: row.deadline,
-                };
+                row.selectedAssignees.forEach(assigneeValue => {
+                    const assigneeOption = assignees.find((a) => a.value === assigneeValue);
+                    let assignedToDept = 'General';
+                    let assignedToUserId = null;
+
+                    if (assigneeOption) {
+                        assignedToDept = assigneeOption.dept;
+                        if (assigneeOption.type === 'user') {
+                            assignedToUserId = parseInt(assigneeOption.value.split(':')[1], 10);
+                        }
+                    }
+
+                    payloadTasks.push({
+                        title: finalTitle,
+                        assigned_to_dept: assignedToDept,
+                        assigned_to_user_id: assignedToUserId,
+                        due_date: row.deadline,
+                    });
+                });
             });
 
             await createTasks({
@@ -310,26 +332,41 @@ const CreateTask = () => {
                                     />
                                 </div>
 
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                                     <div style={{ flex: 1 }}>
-                                        <select
-                                            value={row.assigneeDesc}
-                                            onChange={(e) => updateTaskRow(row.id, 'assigneeDesc', e.target.value)}
-                                            required
-                                            style={{ background: 'white', fontSize: '0.85rem' }}
-                                        >
-                                            <option value="">Pilih Penerima</option>
-                                            <optgroup label="Satu Departemen">
+                                        <div className="multi-assignee-select">
+                                            <div className="selected-tags">
+                                                {(row.selectedAssignees || []).length === 0 ? (
+                                                    <span className="placeholder">Pilih Penerima...</span>
+                                                ) : (
+                                                    row.selectedAssignees.map(val => {
+                                                        const opt = assignees.find(a => a.value === val);
+                                                        return (
+                                                            <div key={val} className="assignee-tag">
+                                                                {opt?.label}
+                                                                <button type="button" onClick={() => toggleAssignee(row.id, val)}><X size={12}/></button>
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                            <div className="assignee-dropdown">
+                                                <div className="dropdown-section">Satu Departemen</div>
                                                 {assignees.filter(a => a.type === 'dept').map(a => (
-                                                    <option key={a.value} value={a.value}>{a.label}</option>
+                                                    <div key={a.value} className="dropdown-item" onClick={() => toggleAssignee(row.id, a.value)}>
+                                                        <input type="checkbox" checked={row.selectedAssignees.includes(a.value)} readOnly />
+                                                        <span>{a.label}</span>
+                                                    </div>
                                                 ))}
-                                            </optgroup>
-                                            <optgroup label="Staff Spesifik">
+                                                <div className="dropdown-section">Staff Spesifik</div>
                                                 {assignees.filter(a => a.type === 'user').map(a => (
-                                                    <option key={a.value} value={a.value}>{a.label}</option>
+                                                    <div key={a.value} className="dropdown-item" onClick={() => toggleAssignee(row.id, a.value)}>
+                                                        <input type="checkbox" checked={row.selectedAssignees.includes(a.value)} readOnly />
+                                                        <span>{a.label}</span>
+                                                    </div>
                                                 ))}
-                                            </optgroup>
-                                        </select>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div style={{ width: '130px' }}>
                                         <input
