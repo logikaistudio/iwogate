@@ -8,7 +8,7 @@ const sanitizeUser = (user) => {
 };
 
 export const setupAuthRoutes = (app) => {
-  app.post('/api/login', async (req, res) => {
+  const handler = async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
       return res.status(400).json({ message: 'Username dan password wajib diisi.' });
@@ -28,7 +28,10 @@ export const setupAuthRoutes = (app) => {
       console.error(err);
       return res.status(500).json({ message: 'Gagal melakukan login.' });
     }
-  });
+  };
+
+  app.post('/api/login', handler);
+  app.post('/login', handler);
 
   app.post('/api/password-reset', async (req, res) => {
     const { email, password, confirmPassword } = req.body;

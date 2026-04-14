@@ -36,8 +36,17 @@ app.use(async (req, res, next) => {
 });
 
 // Health check
-app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'API is healthy' });
+app.get(['/api/health', '/health'], (req, res) => {
+  res.json({ success: true, message: 'API is healthy', timestamp: new Date().toISOString() });
+});
+
+// Diagnostic 404 handler
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: 'Not Found in Express', 
+    requestedUrl: req.url,
+    effectivePath: req.path
+  });
 });
 
 export default app;
