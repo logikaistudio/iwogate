@@ -24,15 +24,22 @@ setupTaskRoutes(app);
 // so we'll init in a middleware or just ensure it's called once.
 let isDbInitialized = false;
 app.use(async (req, res, next) => {
-  if (!isDbInitialized) {
-    try {
+  try {
+    if (!isDbInitialized) {
+      console.log('Initializing DB from Vercel...');
       await initializeDatabase();
       isDbInitialized = true;
-    } catch (e) {
-      console.error('DB Init Error in middleware:', e);
     }
+    next();
+  } catch (err) {
+    console.error('CRITICAL LOG:', err);
+    res.status(500).json({ 
+      error: 'Database Initialization Failed', 
+      message: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+      hint: 'Check if DATABASE_URL is set or if Neon DB is reachable.'
+    });
   }
-  next();
 });
 
 // Health check
