@@ -1,27 +1,29 @@
 import express from 'express';
 import cors from 'cors';
-
-// Temporary comment out to debug crash
-// import { setupAuthRoutes } from '../server/routes/auth.js';
-// import { setupUserRoutes } from '../server/routes/users.js';
-// import { setupRoleRoutes } from '../server/routes/roles.js';
-// import { setupDepartmentRoutes } from '../server/routes/departments.js';
-// import { setupTaskRoutes } from '../server/routes/tasks.js';
-// import { initializeDatabase } from '../server/lib/setup.js';
-// import { sql } from '../server/lib/db.js';
+import { sql } from '../server/lib/db.js';
 
 const app = express();
 
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '10mb' }));
 
-// Minimal health check
-app.get(['/api/health', '/health'], (req, res) => {
+// Health check with DB ping
+app.get(['/api/health', '/health'], async (req, res) => {
+  let dbStatus = 'unknown';
+  try {
+    await sql`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (err) {
+    dbStatus = 'error: ' + err.message;
+  }
+
   res.json({ 
     success: true, 
-    message: 'Minimal API is healthy', 
+    message: 'API is healthy', 
+    dbStatus,
     timestamp: new Date().toISOString()
   });
 });
 
 export default app;
+
