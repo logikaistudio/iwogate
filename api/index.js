@@ -13,6 +13,9 @@ const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '10mb' }));
 
+// Initialize database on startup so production serverless has required tables/data
+await initializeDatabase();
+
 // Setup all routes
 setupAuthRoutes(app);
 setupUserRoutes(app);
