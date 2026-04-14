@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { User, LogOut, Settings as SettingsIcon, Bell, HelpCircle, Loader2 } from 'lucide-react';
-import { sql } from '../lib/db';
 import { useNavigate } from 'react-router-dom';
+import { getUser } from '../lib/api.js';
 import './Profile.css';
 
 const Profile = () => {
@@ -19,10 +19,8 @@ const Profile = () => {
                     return;
                 }
                 const localUser = JSON.parse(userStr);
-                const [userData] = await sql`
-                    SELECT * FROM users WHERE id = ${localUser.id}
-                `;
-                setUser(userData || localUser);
+                const data = await getUser(localUser.id);
+                setUser(data.user || localUser);
             } catch (err) {
                 console.error("Failed to fetch user:", err);
             } finally {
@@ -30,7 +28,7 @@ const Profile = () => {
             }
         };
         fetchUser();
-    }, []);
+    }, [navigate]);
 
     const handleLogout = () => {
         if (confirm("Apakah Anda yakin ingin keluar?")) {

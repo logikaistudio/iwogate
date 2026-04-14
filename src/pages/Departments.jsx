@@ -1,17 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { sql } from '../lib/db';
+import { getDepartments, getDepartmentStats, createDepartment, updateDepartment, deleteDepartment } from '../lib/api.js';
 import { Loader2, Plus, Edit, Trash2, Building, GripVertical } from 'lucide-react';
 import '../components/Modal.css';
 import './Departments.css';
-
-const defaultDepts = [
-    { name: 'Finance', label: 'Keuangan', color: '#3b82f6', description: 'Mengelola keuangan perusahaan' },
-    { name: 'Marketing', label: 'Pemasaran', color: '#f97316', description: 'Promosi dan branding' },
-    { name: 'IT', label: 'Teknologi Informasi', color: '#8b5cf6', description: 'Sistem dan infrastruktur IT' },
-    { name: 'HR', label: 'SDM', color: '#10b981', description: 'Pengelolaan sumber daya manusia' },
-    { name: 'Ops', label: 'Operasional', color: '#ef4444', description: 'Operasional sehari-hari' },
-    { name: 'Management', label: 'Manajemen', color: '#64748b', description: 'Eksekutif dan strategi' }
-];
 
 const Departments = () => {
     const [departments, setDepartments] = useState([]);
@@ -27,59 +18,20 @@ const Departments = () => {
         if (userStr) {
             setCurrentUser(JSON.parse(userStr));
         }
-        initializeDepartments();
+        fetchData();
     }, []);
 
     const fetchData = async () => {
         try {
-            // Don't set global loading whole page re-renders, just refresh data
-            const depts = await sql`SELECT * FROM departments ORDER BY id ASC`;
+            const [deptResponse, statsResponse] = await Promise.all([
+                getDepartments(),
+                getDepartmentStats(),
+            ]);
 
-            // Get stats
-            const result = await sql`
-                SELECT assigned_to_dept, COUNT(*) as count 
-                FROM tasks 
-                WHERE status IN ('Pending', 'In Progress')
-                GROUP BY assigned_to_dept
-            `;
-
-            const statsMap = result.reduce((acc, curr) => {
-                acc[curr.assigned_to_dept] = parseInt(curr.count);
-                return acc;
-            }, {});
-
-            setDepartments(depts);
-            setStats(statsMap);
+            setDepartments(deptResponse.departments);
+            setStats(statsResponse.stats || {});
         } catch (err) {
-            console.error("Fetch function error:", err);
-        }
-    };
-
-    const initializeDepartments = async () => {
-        try {
-            await sql`
-                CREATE TABLE IF NOT EXISTS departments (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    label TEXT NOT NULL,
-                    color TEXT DEFAULT '#3b82f6',
-                    description TEXT,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            `;
-
-            const countResult = await sql`SELECT COUNT(*) FROM departments`;
-            if (parseInt(countResult[0].count) === 0) {
-                for (const dept of defaultDepts) {
-                    await sql`
-                        INSERT INTO departments (name, label, color, description)
-                        VALUES (${dept.name}, ${dept.label}, ${dept.color}, ${dept.description})
-                    `;
-                }
-            }
-            await fetchData();
-        } catch (err) {
-            console.error("Init Error:", err);
+            console.error('Fetch function error:', err);
         } finally {
             setLoading(false);
         }
@@ -91,68 +43,44 @@ const Departments = () => {
         setIsSubmitting(true);
 
         try {
-            // Ensure FormData description is never null
             const desc = formData.description || '';
 
             if (modal.mode === 'create') {
-                const existing = await sql`SELECT id FROM departments WHERE name = ${formData.name}`;
-                if (existing.length > 0) {
-                    alert('Kode Department (Unique Code) sudah terdaftar!');
-                    setIsSubmitting(false);
-                    return;
-                }
-
-                await sql`
-                    INSERT INTO departments (name, label, color, description)
-                    VALUES (${formData.name}, ${formData.label}, ${formData.color}, ${desc})
-                `;
+                await createDepartment({
+                    name: formData.name,
+                    label: formData.label,
+                    color: formData.color,
+                    description: desc,
+                });
             } else {
-                if (!modal.data?.id) throw new Error("ID not found");
-
-                if (modal.data.name !== formData.name) {
-                    const existing = await sql`SELECT id FROM departments WHERE name = ${formData.name} AND id != ${modal.data.id}`;
-                    if (existing.length > 0) {
-                        alert('Kode Department sudah terdaftar!');
-                        setIsSubmitting(false);
-                        return;
-                    }
-                }
-
-                await sql`
-                    UPDATE departments 
-                    SET 
-                        name = ${formData.name}, 
-                        label = ${formData.label}, 
-                        color = ${formData.color}, 
-                        description = ${desc}
-                    WHERE id = ${modal.data.id}
-                `;
+                if (!modal.data?.id) throw new Error('ID not found');
+                await updateDepartment(modal.data.id, {
+                    name: formData.name,
+                    label: formData.label,
+                    color: formData.color,
+                    description: desc,
+                });
             }
-
-            // Force strict reload sequence
             await fetchData();
             setModal({ open: false, mode: 'create', data: null });
             resetForm();
-            alert("Berhasil disimpan!");
-
+            alert('Berhasil disimpan!');
         } catch (err) {
-            console.error("Save Error:", err);
-            alert("Gagal menyimpan: " + err.message);
+            console.error('Save Error:', err);
+            alert('Gagal menyimpan: ' + err.message);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const handleDelete = async (id) => {
-        if (!confirm("Yakin ingin menghapus departemen ini?")) return;
+        if (!confirm('Yakin ingin menghapus departemen ini?')) return;
         try {
-            // Check for dependencies (optional, but good practice)
-            // For now just try delete
-            await sql`DELETE FROM departments WHERE id = ${id}`;
+            await deleteDepartment(id);
             await fetchData();
         } catch (err) {
-            console.error("Delete Error:", err);
-            alert("Gagal menghapus department. Mungkin sedang digunakan oleh Tugas aktif.");
+            console.error('Delete Error:', err);
+            alert('Gagal menghapus department. Mungkin sedang digunakan oleh Tugas aktif.');
         }
     };
 

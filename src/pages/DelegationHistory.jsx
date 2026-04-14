@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { sql } from '../lib/db';
+import { getTasks, deleteTask } from '../lib/api.js';
 import { Loader2, ArrowLeft, Filter, Calendar, User, Eye, CheckCircle, Clock, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,24 +19,14 @@ const DelegationHistory = () => {
 
         const fetchTasks = async () => {
             try {
-                // Fetch outgoing tasks
-                const result = await sql`
-                    SELECT 
-                        t.*, 
-                        au.name as assigned_user_name 
-                    FROM tasks t
-                    LEFT JOIN users au ON t.assigned_to_user_id = au.id
-                    WHERE t.type = 'outgoing'
-                    ORDER BY t.created_at DESC
-                `;
-
-                setTasks(result.map(task => ({
+                const result = await getTasks({ type: 'outgoing' });
+                setTasks(result.tasks.map((task) => ({
                     ...task,
-                    displayDate: new Date(task.created_at).toLocaleDateString(),
-                    assignee: task.assigned_user_name ? `${task.assigned_user_name} (${task.assigned_to_dept})` : task.assigned_to_dept
+                    displayDate: task.created_at ? new Date(task.created_at).toLocaleDateString() : '-',
+                    assignee: task.assigned_to_name ? `${task.assigned_to_name} (${task.assigned_to_dept})` : task.assigned_to_dept,
                 })));
             } catch (err) {
-                console.error("Failed to fetch history:", err);
+                console.error('Failed to fetch history:', err);
             } finally {
                 setLoading(false);
             }
@@ -47,14 +37,14 @@ const DelegationHistory = () => {
 
     const handleDelete = async (id, e) => {
         e.stopPropagation();
-        if (!confirm("Hapus delegasi ini dari riwayat? Data tugas akan hilang permanen.")) return;
+        if (!confirm('Hapus delegasi ini dari riwayat? Data tugas akan hilang permanen.')) return;
         try {
-            await sql`DELETE FROM tasks WHERE id = ${id}`;
-            setTasks(prev => prev.filter(t => t.id !== id));
-            alert("Berhasil dihapus.");
+            await deleteTask(id);
+            setTasks(prev => prev.filter((t) => t.id !== id));
+            alert('Berhasil dihapus.');
         } catch (err) {
-            console.error("Delete failed:", err);
-            alert("Gagal menghapus.");
+            console.error('Delete failed:', err);
+            alert('Gagal menghapus.');
         }
     };
 

@@ -1,5 +1,5 @@
 
-import { sql } from '../src/lib/db.js';
+import { sql } from '../server/lib/db.js';
 
 const updateSchemaUsers = async () => {
     console.log('Updating users schema...');

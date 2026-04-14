@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Plus, Loader2, ArrowRight } from 'lucide-react';
 import TaskCard from '../components/TaskCard';
 import { Link } from 'react-router-dom';
-import { sql } from '../lib/db';
+import { getTasks, deleteTask } from '../lib/api.js';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -22,31 +22,16 @@ const Dashboard = () => {
 
         const fetchTasks = async () => {
             try {
-                // Fetch tasks with assigner name
-                // JOIN with users to get the name of the person who assigned the task
-                // We use 'type' column to distinguish incoming/outgoing for this prototype
-                const result = await sql`
-                    SELECT 
-                        t.*, 
-                        u.name as assigned_by_name, 
-                        u.department as assigned_by_dept 
-                    FROM tasks t
-                    LEFT JOIN users u ON t.assigned_by_user_id = u.id
-                    ORDER BY t.created_at DESC
-                `;
-
-                // Format the tasks for display
-                const formattedTasks = result.map(task => ({
+                const result = await getTasks({});
+                const formattedTasks = result.tasks.map(task => ({
                     ...task,
                     assignedBy: task.type === 'outgoing' ? 'Saya' : (task.assigned_by_name ? `${task.assigned_by_name} (${task.assigned_by_dept})` : 'System'),
-                    // Format date simply
-                    dueDate: new Date(task.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-',
                 }));
-
                 setTasks(formattedTasks);
             } catch (err) {
-                console.error("Failed to fetch tasks:", err);
-                setError("Gagal memuat data. Periksa koneksi internet Anda.");
+                console.error('Failed to fetch tasks:', err);
+                setError('Gagal memuat data. Periksa koneksi internet Anda.');
             } finally {
                 setLoading(false);
             }
@@ -56,14 +41,14 @@ const Dashboard = () => {
     }, []);
 
     const handleDelete = async (taskId) => {
-        if (!confirm("Hapus tugas ini? Data akan hilang permanen.")) return;
+        if (!confirm('Hapus tugas ini? Data akan hilang permanen.')) return;
         try {
-            await sql`DELETE FROM tasks WHERE id = ${taskId}`;
+            await deleteTask(taskId);
             setTasks(prev => prev.filter(t => t.id !== taskId));
-            alert("Tugas berhasil dihapus.");
+            alert('Tugas berhasil dihapus.');
         } catch (err) {
-            console.error("Delete failed:", err);
-            alert("Gagal menghapus tugas.");
+            console.error('Delete failed:', err);
+            alert('Gagal menghapus tugas.');
         }
     };
 

@@ -1,5 +1,5 @@
 
-import { initializeDatabase } from '../src/lib/setup.js';
+import { initializeDatabase } from '../server/lib/setup.js';
 
 initializeDatabase()
     .then(() => {

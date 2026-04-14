@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { sql } from '../lib/db';
+import { useNavigate, Link } from 'react-router-dom';
+import { login } from '../lib/api.js';
 import { Loader2, Eye, EyeOff, Lock, User } from 'lucide-react';
 import './Login.css';
 
@@ -18,37 +18,12 @@ const Login = () => {
         setError('');
 
         try {
-            // Find user by username
-            const users = await sql`
-                SELECT * FROM users WHERE username = ${username}
-            `;
-
-            if (users.length === 0) {
-                setError('Username tidak ditemukan.');
-                setLoading(false);
-                return;
-            }
-
-            const user = users[0];
-
-            // Simple password check (plaintext for prototype as stored in DB)
-            // In production usage, this MUST be bcrypted.
-            if (user.password !== password) {
-                setError('Password salah.');
-                setLoading(false);
-                return;
-            }
-
-            // Success
-            // Store user session - utilize sessionStorage so it clears on restart
-            sessionStorage.setItem('iwogate_user', JSON.stringify(user));
-
-            // Redirect
+            const response = await login(username, password);
+            sessionStorage.setItem('iwogate_user', JSON.stringify(response.user));
             navigate('/');
-
         } catch (err) {
-            console.error("Login failed:", err);
-            setError('Terjadi kesalahan koneksi.');
+            console.error('Login failed:', err);
+            setError(err.message || 'Terjadi kesalahan koneksi.');
         } finally {
             setLoading(false);
         }
@@ -108,6 +83,12 @@ const Login = () => {
                     <button type="submit" className="login-btn" disabled={loading}>
                         {loading ? <Loader2 className="animate-spin" /> : 'Masuk'}
                     </button>
+
+                    <div className="login-footer">
+                        <Link to="/reset-password" className="text-sm text-primary underline">
+                            Lupa password?
+                        </Link>
+                    </div>
                 </form>
 
 

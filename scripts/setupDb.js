@@ -1,4 +1,4 @@
-import { sql } from './lib/db.js';
+import { sql } from '../server/lib/db.js';
 
 async function setupDatabase() {
     console.log("Setting up database...");

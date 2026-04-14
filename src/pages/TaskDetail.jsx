@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, User, Download, CheckCircle, XCircle, FileText, Loader2, ArrowRightCircle, Trash2 } from 'lucide-react';
-import { sql } from '../lib/db';
+import { getTask, deleteTask, taskAction, getUsers } from '../lib/api.js';
 import './TaskDetail.css';
 
 const TaskDetail = () => {
@@ -29,52 +29,27 @@ const TaskDetail = () => {
 
         const fetchData = async () => {
             try {
-                // Fetch Task
-                const [taskData] = await sql`
-                    SELECT 
-                        t.*, 
-                        u.name as assigned_by_name, 
-                        u.department as assigned_by_dept 
-                    FROM tasks t
-                    LEFT JOIN users u ON t.assigned_by_user_id = u.id
-                    WHERE t.id = ${id}
-                `;
-
+                const response = await getTask(id);
+                const taskData = response.task;
                 if (!taskData) {
-                    setError("Tugas tidak ditemukan.");
+                    setError('Tugas tidak ditemukan.');
                     return;
                 }
-
-                const attachments = await sql`SELECT * FROM attachments WHERE task_id = ${id}`;
-
-                // Fetch Logs
-                const logs = await sql`
-                    SELECT tl.*, u.name as user_name 
-                    FROM task_logs tl
-                    LEFT JOIN users u ON tl.user_id = u.id
-                    WHERE tl.task_id = ${id}
-                    ORDER BY tl.created_at DESC
-                `;
 
                 setTask({
                     ...taskData,
                     assignedBy: taskData.type === 'outgoing' ? 'Saya' : `${taskData.assigned_by_name} (${taskData.assigned_by_dept})`,
-                    assignedTo: taskData.assigned_to_user_id ? `User #${taskData.assigned_to_user_id}` : taskData.assigned_to_dept,
-                    dueDate: new Date(taskData.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
-                    attachments: attachments.map(att => ({ ...att, url: att.file_url })),
-                    logs: logs.map(l => ({
-                        ...l,
-                        date: new Date(l.created_at).toLocaleString('id-ID')
-                    }))
+                    assignedTo: taskData.assigned_to_user_id ? taskData.assigned_to_name : taskData.assigned_to_dept,
+                    dueDate: taskData.due_date ? new Date(taskData.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-',
+                    attachments: taskData.attachments.map(att => ({ ...att, url: att.file_url })),
+                    logs: taskData.logs.map(l => ({ ...l, date: new Date(l.created_at).toLocaleString('id-ID') })),
                 });
 
-                // Fetch Users for Delegation
-                const allUsers = await sql`SELECT id, name, department FROM users WHERE id != 1`; // Exclude self
-                setUsers(allUsers);
-
+                const usersResponse = await getUsers();
+                setUsers(usersResponse.users.filter((u) => u.id !== (parseInt(userStr ? JSON.parse(userStr).id : 0, 10) || 0)));
             } catch (err) {
                 console.error(err);
-                setError("Gagal memuat data.");
+                setError('Gagal memuat data.');
             } finally {
                 setLoading(false);
             }
@@ -84,15 +59,15 @@ const TaskDetail = () => {
     }, [id]);
 
     const handleDelete = async () => {
-        if (!confirm("PERINGATAN: Apakah Anda yakin ingin menghapus tugas ini secara permanen? Aksi ini tidak dapat dibatalkan.")) return;
+        if (!confirm('PERINGATAN: Apakah Anda yakin ingin menghapus tugas ini secara permanen? Aksi ini tidak dapat dibatalkan.')) return;
         try {
             setUpdating(true);
-            await sql`DELETE FROM tasks WHERE id = ${id}`;
-            alert("Tugas berhasil dihapus.");
+            await deleteTask(id);
+            alert('Tugas berhasil dihapus.');
             navigate('/');
         } catch (err) {
-            console.error("Delete failed:", err);
-            alert("Gagal menghapus tugas: " + err.message);
+            console.error('Delete failed:', err);
+            alert('Gagal menghapus tugas: ' + err.message);
         } finally {
             setUpdating(false);
         }
@@ -110,54 +85,28 @@ const TaskDetail = () => {
 
     const handleActionSubmit = async () => {
         if (modal.type === 'reject' && !reason.trim()) {
-            alert("Harap isi alasan penolakan.");
+            alert('Harap isi alasan penolakan.');
             return;
         }
         if (modal.type === 'delegate' && !selectedDelegate) {
-            alert("Harap pilih penerima delegasi.");
+            alert('Harap pilih penerima delegasi.');
             return;
         }
 
         setUpdating(true);
         try {
-            const currentUserId = currentUser?.id || 1; // Use actual user ID
-
-            if (modal.type === 'delegate') {
-                const targetUser = users.find(u => u.id == selectedDelegate);
-
-                await sql`
-                    UPDATE tasks 
-                    SET assigned_to_user_id = ${selectedDelegate}, 
-                        assigned_to_dept = ${targetUser.department},
-                        assigned_by_user_id = ${currentUserId}
-                    WHERE id = ${id}
-                `;
-
-                await sql`
-                    INSERT INTO task_logs (task_id, user_id, action, note)
-                    VALUES (${id}, ${currentUserId}, 'delegated', ${`Mendelegasikan ke ${targetUser.name}. Catatan: ${reason}`})
-                `;
-
-                alert("Tugas berhasil didelegasikan.");
-
-            } else {
-                const newStatus = modal.type === 'reject' ? 'Rejected' : 'Completed';
-                const actionType = modal.type === 'reject' ? 'rejected' : 'completed';
-
-                await sql`
-                    UPDATE tasks SET status = ${newStatus}, outcome = ${reason} WHERE id = ${id}
-                `;
-
-                await sql`
-                    INSERT INTO task_logs (task_id, user_id, action, note)
-                    VALUES (${id}, ${currentUserId}, ${actionType}, ${reason})
-                `;
-            }
-
+            const currentUserId = currentUser?.id || 1;
+            await taskAction(id, {
+                type: modal.type,
+                reason,
+                targetUserId: selectedDelegate,
+                currentUserId,
+            });
+            alert(modal.type === 'delegate' ? 'Tugas berhasil didelegasikan.' : 'Tugas berhasil diperbarui.');
             navigate('/');
         } catch (err) {
             console.error(err);
-            alert("Gagal memproses aksi.");
+            alert('Gagal memproses aksi.');
         } finally {
             setUpdating(false);
             setModal({ open: false, type: '', title: '' });

@@ -294,3 +294,170 @@
     align-items: center;
     gap: 0.5rem;
 }
+
+/* ─── Permission Checkbox UI ─── */
+
+.perm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.perm-select-all-btn {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    padding: 0.2rem 0.65rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.perm-select-all-btn:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.perm-groups {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.perm-group {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fafafa;
+}
+
+.perm-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 1rem;
+    background: #f1f5f9;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.perm-group-header:hover {
+    background: #e2e8f0;
+}
+
+.perm-group-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.perm-group-title {
+    flex: 1;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-main);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.perm-group-check {
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s;
+}
+
+.perm-group-check.checked {
+    color: var(--primary);
+}
+
+.perm-group-check.partial {
+    color: #6366f1;
+    opacity: 0.65;
+}
+
+.perm-items {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+}
+
+.perm-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1rem;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-bottom: 1px solid #f0f4f8;
+}
+
+.perm-item:hover {
+    background: #eef2ff;
+}
+
+.perm-item:nth-child(odd) {
+    border-right: 1px solid #f0f4f8;
+}
+
+.perm-checkbox {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--primary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.perm-item-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-main);
+    flex: 1;
+}
+
+.perm-item-key {
+    font-size: 0.68rem;
+    font-family: monospace;
+    color: #94a3b8;
+    background: #f1f5f9;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+/* ─── Permission Chips (Role Card View) ─── */
+
+.perm-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.perm-chip {
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    white-space: nowrap;
+}
+
+.perm-chip-all {
+    background: #dcfce7;
+    color: #15803d;
+    border-color: #86efac;
+    font-weight: 700;
+}
+
+.perm-chip-none {
+    background: #fff1f2;
+    color: #be123c;
+    border-color: #fda4af;
+}
