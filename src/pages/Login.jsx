@@ -20,6 +20,9 @@ const Login = () => {
         try {
             const response = await login(username, password);
             sessionStorage.setItem('iwogate_user', JSON.stringify(response.user));
+            if (response.token) {
+                sessionStorage.setItem('iwogate_token', response.token);
+            }
             navigate('/');
         } catch (err) {
             console.error('Login failed:', err);

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { initializeDatabase } from './lib/setup.js';
+import { requireAuth } from './lib/auth.js';
 import { setupAuthRoutes } from './routes/auth.js';
 import { setupUserRoutes } from './routes/users.js';
 import { setupRoleRoutes } from './routes/roles.js';
@@ -20,6 +21,10 @@ app.get('/api/health', (req, res) => {
 
 // Setup all routes
 setupAuthRoutes(app);
+
+// Protect all API routes after auth
+app.use(requireAuth);
+
 setupUserRoutes(app);
 setupRoleRoutes(app);
 setupDepartmentRoutes(app);

@@ -223,7 +223,6 @@ const CreateTask = () => {
                 docDate,
                 sender,
                 attachments: attachmentData,
-                assignedById: currentUser?.id || null,
             });
 
             navigate('/history'); // Redirect to history list to see the bulk creation

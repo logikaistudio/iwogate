@@ -1,4 +1,5 @@
 import { sql } from '../lib/db.js';
+import { createAuthToken } from '../lib/auth.js';
 
 const sanitizeUser = (user) => {
   if (!user) return null;
@@ -23,7 +24,13 @@ export const setupAuthRoutes = (app) => {
       if (user.password !== password) {
         return res.status(400).json({ message: 'Password salah.' });
       }
-      return res.json({ user: sanitizeUser(user) });
+      const sanitized = sanitizeUser(user);
+      const token = createAuthToken({
+        id: sanitized.id,
+        role: sanitized.role,
+        department: sanitized.department,
+      });
+      return res.json({ user: sanitized, token });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ message: 'Gagal melakukan login.' });

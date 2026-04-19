@@ -14,7 +14,8 @@ import Profile from './pages/Profile';
 // Helper component to check auth
 const RequireAuth = ({ children }) => {
   const user = sessionStorage.getItem('iwogate_user');
-  if (!user) {
+  const token = sessionStorage.getItem('iwogate_token');
+  if (!user || !token) {
     return <Navigate to="/login" replace />;
   }
   return <Layout>{children}</Layout>;

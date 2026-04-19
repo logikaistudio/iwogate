@@ -83,14 +83,12 @@ const loadTask = async (id) => {
 export const setupTaskRoutes = (app) => {
   app.get('/api/tasks', async (req, res) => {
     try {
-      const userId = parseIntSafe(req.query.userId);
-      const userRole = req.query.userRole;
-      const userDept = req.query.userDept;
+      const user = req.user;
       const allTasks = await loadTasks();
       let filtered = allTasks;
 
-      if (!isPrivilegedUser(userRole)) {
-        filtered = filtered.filter((task) => canAccessTask(task, userId, userRole, userDept));
+      if (!isPrivilegedUser(user.role)) {
+        filtered = filtered.filter((task) => canAccessTask(task, user.id, user.role, user.department));
       }
 
       if (req.query.type) {
@@ -119,12 +117,10 @@ export const setupTaskRoutes = (app) => {
 
   app.get('/api/tasks/:id', async (req, res) => {
     try {
-      const userId = parseIntSafe(req.query.userId);
-      const userRole = req.query.userRole;
-      const userDept = req.query.userDept;
+      const user = req.user;
       const task = await loadTask(req.params.id);
       if (!task) return res.status(404).json({ message: 'Tugas tidak ditemukan.' });
-      if (!canAccessTask(task, userId, userRole, userDept)) {
+      if (!canAccessTask(task, user.id, user.role, user.department)) {
         return res.status(403).json({ message: 'Akses ditolak untuk tugas ini.' });
       }
       return res.json({ task });
@@ -135,7 +131,8 @@ export const setupTaskRoutes = (app) => {
   });
 
   app.post('/api/tasks', async (req, res) => {
-    const { tasks, desc, refNo, docDate, sender, attachments, assignedById } = req.body;
+    const { tasks, desc, refNo, docDate, sender, attachments } = req.body;
+    const user = req.user;
     if (!Array.isArray(tasks) || tasks.length === 0) {
       return res.status(400).json({ message: 'Daftar tugas tidak boleh kosong.' });
     }
@@ -162,7 +159,7 @@ export const setupTaskRoutes = (app) => {
           ) VALUES (
             ${row.title},
             ${desc || ''},
-            ${assignedById || null},
+            ${user.id},
             ${row.assigned_to_dept},
             ${row.assigned_to_user_id || null},
             'Pending',
@@ -193,6 +190,12 @@ export const setupTaskRoutes = (app) => {
 
   app.delete('/api/tasks/:id', async (req, res) => {
     try {
+      const task = await loadTask(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Tugas tidak ditemukan.' });
+      const user = req.user;
+      if (!isPrivilegedUser(user.role)) {
+        return res.status(403).json({ message: 'Akses ditolak.' });
+      }
       await sql`DELETE FROM tasks WHERE id = ${req.params.id}`;
       return res.json({ message: 'Tugas berhasil dihapus.' });
     } catch (err) {
@@ -208,7 +211,13 @@ export const setupTaskRoutes = (app) => {
     }
 
     try {
-      const currentUserId = req.body.currentUserId || null;
+      const user = req.user;
+      const task = await loadTask(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Tugas tidak ditemukan.' });
+      if (!canAccessTask(task, user.id, user.role, user.department)) {
+        return res.status(403).json({ message: 'Akses ditolak.' });
+      }
+
       if (type === 'delegate') {
         const [target] = await sql`SELECT * FROM users WHERE id = ${targetUserId} LIMIT 1`;
         if (!target) {
@@ -216,12 +225,12 @@ export const setupTaskRoutes = (app) => {
         }
         await sql`
           UPDATE tasks
-          SET assigned_to_user_id = ${targetUserId}, assigned_to_dept = ${target.department}, assigned_by_user_id = ${currentUserId}
+          SET assigned_to_user_id = ${targetUserId}, assigned_to_dept = ${target.department}, assigned_by_user_id = ${user.id}
           WHERE id = ${req.params.id}
         `;
         await sql`
           INSERT INTO task_logs (task_id, user_id, action, note)
-          VALUES (${req.params.id}, ${currentUserId}, 'delegated', ${`Mendelegasikan ke ${target.name}. Catatan: ${reason || ''}`})
+          VALUES (${req.params.id}, ${user.id}, 'delegated', ${`Mendelegasikan ke ${target.name}. Catatan: ${reason || ''}`})
         `;
         return res.json({ message: 'Tugas berhasil didelegasikan.' });
       }
@@ -235,7 +244,7 @@ export const setupTaskRoutes = (app) => {
       `;
       await sql`
         INSERT INTO task_logs (task_id, user_id, action, note)
-        VALUES (${req.params.id}, ${currentUserId}, ${action}, ${reason || null})
+        VALUES (${req.params.id}, ${user.id}, ${action}, ${reason || null})
       `;
       return res.json({ message: 'Tugas berhasil diperbarui.' });
     } catch (err) {

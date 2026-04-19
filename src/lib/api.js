@@ -1,10 +1,18 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
+const getAuthToken = () => sessionStorage.getItem('iwogate_token');
+
 const request = async (path, options = {}) => {
+  const token = getAuthToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
+    credentials: 'same-origin',
     ...options,
   });
 

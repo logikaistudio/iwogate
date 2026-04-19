@@ -100,12 +100,10 @@ const TaskDetail = () => {
 
         setUpdating(true);
         try {
-            const currentUserId = currentUser?.id || 1;
-            await taskAction(id, {
+                await taskAction(id, {
                 type: modal.type,
                 reason,
                 targetUserId: selectedDelegate,
-                currentUserId,
             });
             alert(modal.type === 'delegate' ? 'Tugas berhasil didelegasikan.' : 'Tugas berhasil diperbarui.');
             navigate('/');
