@@ -8,6 +8,32 @@ const formatTask = (task) => ({
   assigned_to_dept: task.assigned_to_dept || null,
 });
 
+const parseIntSafe = (value) => {
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const isPrivilegedUser = (role) => ['superuser', 'admin'].includes((role || '').toLowerCase());
+
+const canAccessTask = (task, userId, userRole, userDept) => {
+  if (isPrivilegedUser(userRole)) {
+    return true;
+  }
+  if (!userId) {
+    return false;
+  }
+  if (task.assigned_by_user_id === userId) {
+    return true;
+  }
+  if (task.assigned_to_user_id === userId) {
+    return true;
+  }
+  if (!task.assigned_to_user_id && task.assigned_to_dept && userDept && task.assigned_to_dept === userDept) {
+    return true;
+  }
+  return false;
+};
+
 const loadTasks = async () => {
   const tasks = await sql`
     SELECT
@@ -57,8 +83,16 @@ const loadTask = async (id) => {
 export const setupTaskRoutes = (app) => {
   app.get('/api/tasks', async (req, res) => {
     try {
+      const userId = parseIntSafe(req.query.userId);
+      const userRole = req.query.userRole;
+      const userDept = req.query.userDept;
       const allTasks = await loadTasks();
       let filtered = allTasks;
+
+      if (!isPrivilegedUser(userRole)) {
+        filtered = filtered.filter((task) => canAccessTask(task, userId, userRole, userDept));
+      }
+
       if (req.query.type) {
         filtered = filtered.filter((task) => task.type === req.query.type);
       }
@@ -85,8 +119,14 @@ export const setupTaskRoutes = (app) => {
 
   app.get('/api/tasks/:id', async (req, res) => {
     try {
+      const userId = parseIntSafe(req.query.userId);
+      const userRole = req.query.userRole;
+      const userDept = req.query.userDept;
       const task = await loadTask(req.params.id);
       if (!task) return res.status(404).json({ message: 'Tugas tidak ditemukan.' });
+      if (!canAccessTask(task, userId, userRole, userDept)) {
+        return res.status(403).json({ message: 'Akses ditolak untuk tugas ini.' });
+      }
       return res.json({ task });
     } catch (err) {
       console.error(err);

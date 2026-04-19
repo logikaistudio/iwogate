@@ -15,14 +15,24 @@ const Dashboard = () => {
     const [currentUser, setCurrentUser] = useState(null);
 
     useEffect(() => {
-        const userStr = sessionStorage.getItem('iwogate_user');
-        if (userStr) {
-            setCurrentUser(JSON.parse(userStr));
+            const userStr = sessionStorage.getItem('iwogate_user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        if (user) {
+            setCurrentUser(user);
         }
 
         const fetchTasks = async () => {
+            if (!user) {
+                setLoading(false);
+                return;
+            }
+
             try {
-                const result = await getTasks({});
+                const result = await getTasks({
+                    userId: user.id,
+                    userRole: user.role,
+                    userDept: user.department,
+                });
                 const formattedTasks = result.tasks.map(task => ({
                     ...task,
                     assignedBy: task.type === 'outgoing' ? 'Saya' : (task.assigned_by_name ? `${task.assigned_by_name} (${task.assigned_by_dept})` : 'System'),

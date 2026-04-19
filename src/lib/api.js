@@ -50,15 +50,25 @@ export const updateDepartment = (id, data) =>
   request(`/departments/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deleteDepartment = (id) => request(`/departments/${id}`, { method: 'DELETE' });
 
-export const getTasks = ({ type, status, search } = {}) => {
+export const getTasks = ({ type, status, search, userId, userRole, userDept } = {}) => {
   const params = new URLSearchParams();
   if (type) params.set('type', type);
   if (status) params.set('status', status);
   if (search) params.set('search', search);
+  if (userId) params.set('userId', userId);
+  if (userRole) params.set('userRole', userRole);
+  if (userDept) params.set('userDept', userDept);
   return request(`/tasks?${params.toString()}`);
 };
 
-export const getTask = (id) => request(`/tasks/${id}`);
+export const getTask = (id, { userId, userRole, userDept } = {}) => {
+  const params = new URLSearchParams();
+  if (userId) params.set('userId', userId);
+  if (userRole) params.set('userRole', userRole);
+  if (userDept) params.set('userDept', userDept);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return request(`/tasks/${id}${query}`);
+};
 export const createTasks = (payload) =>
   request('/tasks', { method: 'POST', body: JSON.stringify(payload) });
 export const deleteTask = (id) => request(`/tasks/${id}`, { method: 'DELETE' });

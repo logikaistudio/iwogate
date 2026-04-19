@@ -23,13 +23,18 @@ const TaskDetail = () => {
 
     useEffect(() => {
         const userStr = sessionStorage.getItem('iwogate_user');
-        if (userStr) {
-            setCurrentUser(JSON.parse(userStr));
+        const user = userStr ? JSON.parse(userStr) : null;
+        if (user) {
+            setCurrentUser(user);
         }
 
         const fetchData = async () => {
             try {
-                const response = await getTask(id);
+                const response = await getTask(id, {
+                    userId: user?.id,
+                    userRole: user?.role,
+                    userDept: user?.department,
+                });
                 const taskData = response.task;
                 if (!taskData) {
                     setError('Tugas tidak ditemukan.');

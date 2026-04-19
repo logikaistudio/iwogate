@@ -18,8 +18,18 @@ const DelegationHistory = () => {
         }
 
         const fetchTasks = async () => {
+            if (!user) {
+                setLoading(false);
+                return;
+            }
+
             try {
-                const result = await getTasks({ type: 'outgoing' });
+                const result = await getTasks({
+                    type: 'outgoing',
+                    userId: user.id,
+                    userRole: user.role,
+                    userDept: user.department,
+                });
                 setTasks(result.tasks.map((task) => ({
                     ...task,
                     displayDate: task.created_at ? new Date(task.created_at).toLocaleDateString() : '-',
