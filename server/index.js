@@ -7,6 +7,8 @@ import { setupUserRoutes } from './routes/users.js';
 import { setupRoleRoutes } from './routes/roles.js';
 import { setupDepartmentRoutes } from './routes/departments.js';
 import { setupTaskRoutes } from './routes/tasks.js';
+import { setupUploadRoutes } from './routes/uploads.js';
+import { initWS } from './lib/ws-notify.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -29,10 +31,19 @@ setupUserRoutes(app);
 setupRoleRoutes(app);
 setupDepartmentRoutes(app);
 setupTaskRoutes(app);
+setupUploadRoutes(app);
 
 // Initialize database and start server
 await initializeDatabase();
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`API server ready at http://localhost:${port}`);
 });
+
+// Initialize WebSocket server for realtime notifications
+try {
+  initWS(server);
+  console.log('WebSocket server initialized');
+} catch (e) {
+  console.error('Failed to initialize WebSocket server', e);
+}

@@ -41,9 +41,11 @@ const CreateTask = () => {
                 const users = result.users.filter((u) => u.id !== (user?.id || 0));
 
                 let filteredResult = users;
-                if (user?.role === 'staff' || user?.role === 'staf') {
+                const roleRaw = (user?.role || '').toLowerCase();
+                const normalizedRole = roleRaw === 'staf' ? 'staff' : roleRaw;
+                if (normalizedRole === 'staff') {
                     filteredResult = users.filter(
-                        (u) => ['director', 'direktur', 'admin', 'superuser'].includes(u.role)
+                        (u) => ['director', 'direktur', 'admin', 'superuser'].includes((u.role || '').toLowerCase())
                     );
                 }
 
@@ -63,7 +65,7 @@ const CreateTask = () => {
                     dept: dept.name,
                 }));
 
-                if (user?.role === 'staff' || user?.role === 'staf') {
+                if (normalizedRole === 'staff') {
                     setAssignees([...userOptions]);
                 } else {
                     setAssignees([...deptOptions, ...userOptions]);
@@ -163,27 +165,34 @@ const CreateTask = () => {
             const attachmentData = [];
             if (files.length > 0) {
                 for (const file of files) {
-                    let fileType = 'doc';
-                    if (file.type.includes('pdf')) fileType = 'pdf';
-                    else if (file.type.includes('image')) fileType = 'img';
-
-                    const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
-                    let fileUrl = '#';
-
-                    if (file.size < 5 * 1024 * 1024) {
+                    // request presigned URL from server
+                    try {
+                        const presignRes = await fetch('/api/uploads/presign', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...(sessionStorage.getItem('iwogate_token') ? { Authorization: `Bearer ${sessionStorage.getItem('iwogate_token')}` } : {}) },
+                            body: JSON.stringify({ fileName: file.name, contentType: file.type })
+                        });
+                        if (!presignRes.ok) throw new Error('Presign failed');
+                        const presign = await presignRes.json();
+                        // upload to S3 via PUT
+                        await fetch(presign.url, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+                        attachmentData.push({
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            url: presign.publicUrl,
+                            storage_key: presign.key,
+                        });
+                    } catch (err) {
+                        console.error('Upload failed for', file.name, err);
+                        // fallback to embedding small file as data URL
                         try {
-                            fileUrl = await fileToDataURL(file);
-                        } catch (readErr) {
-                            console.error('Failed to read file', readErr);
+                            const data = await fileToDataURL(file);
+                            attachmentData.push({ name: file.name, type: file.type, size: file.size, url: data });
+                        } catch (rerr) {
+                            // ignore file
                         }
                     }
-
-                    attachmentData.push({
-                        name: file.name,
-                        type: fileType,
-                        size: sizeInMB + ' MB',
-                        url: fileUrl,
-                    });
                 }
             }
 

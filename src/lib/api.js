@@ -16,6 +16,17 @@ const request = async (path, options = {}) => {
     ...options,
   });
 
+  // Auto-handle unauthorized: clear session and surface a clear error
+  if (response.status === 401) {
+    try {
+      sessionStorage.removeItem('iwogate_token');
+      sessionStorage.removeItem('iwogate_user');
+    } catch (e) {
+      // ignore
+    }
+    throw new Error('Unauthorized. Please login again.');
+  }
+
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(body?.message || 'Server request failed');
@@ -58,7 +69,7 @@ export const updateDepartment = (id, data) =>
   request(`/departments/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deleteDepartment = (id) => request(`/departments/${id}`, { method: 'DELETE' });
 
-export const getTasks = ({ type, status, search, userId, userRole, userDept } = {}) => {
+export const getTasks = ({ type, status, search, userId, userRole, userDept, limit, offset } = {}) => {
   const params = new URLSearchParams();
   if (type) params.set('type', type);
   if (status) params.set('status', status);
@@ -66,8 +77,13 @@ export const getTasks = ({ type, status, search, userId, userRole, userDept } = 
   if (userId) params.set('userId', userId);
   if (userRole) params.set('userRole', userRole);
   if (userDept) params.set('userDept', userDept);
+  if (limit) params.set('limit', limit);
+  if (offset) params.set('offset', offset);
   return request(`/tasks?${params.toString()}`);
 };
+
+export const getNotifications = () => request('/notifications');
+export const markNotificationRead = (id) => request(`/notifications/${id}/read`, { method: 'POST' });
 
 export const getTask = (id, { userId, userRole, userDept } = {}) => {
   const params = new URLSearchParams();

@@ -9,41 +9,62 @@ const DelegationHistory = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [offset, setOffset] = useState(0);
+    const [limit] = useState(20);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
 
     useEffect(() => {
         const userStr = sessionStorage.getItem('iwogate_user');
-        if (userStr) {
-            setCurrentUser(JSON.parse(userStr));
+        const user = userStr ? JSON.parse(userStr) : null;
+        if (user) {
+            setCurrentUser(user);
+        }
+        fetchHistory();
+    }, []);
+
+    const fetchHistory = async ({ reset = true, off = 0 } = {}) => {
+        const userStr = sessionStorage.getItem('iwogate_user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        if (!user) {
+            setLoading(false);
+            return;
         }
 
-        const fetchTasks = async () => {
-            if (!user) {
-                setLoading(false);
-                return;
-            }
+        try {
+            const result = await getTasks({
+                type: 'outgoing',
+                userId: user.id,
+                userRole: user.role,
+                userDept: user.department,
+                limit,
+                offset: off,
+            });
+            const mapped = result.tasks.map((task) => ({
+                ...task,
+                displayDate: task.created_at ? new Date(task.created_at).toLocaleDateString() : '-',
+                assignee: task.assigned_to_name ? `${task.assigned_to_name} (${task.assigned_to_dept})` : task.assigned_to_dept,
+            }));
+            if (reset) setTasks(mapped);
+            else setTasks(prev => [...prev, ...mapped]);
+            setOffset(off + mapped.length);
+        } catch (err) {
+            console.error('Failed to fetch history:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-            try {
-                const result = await getTasks({
-                    type: 'outgoing',
-                    userId: user.id,
-                    userRole: user.role,
-                    userDept: user.department,
-                });
-                setTasks(result.tasks.map((task) => ({
-                    ...task,
-                    displayDate: task.created_at ? new Date(task.created_at).toLocaleDateString() : '-',
-                    assignee: task.assigned_to_name ? `${task.assigned_to_name} (${task.assigned_to_dept})` : task.assigned_to_dept,
-                })));
-            } catch (err) {
-                console.error('Failed to fetch history:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchTasks();
-    }, []);
+    const loadMore = async () => {
+        setLoadingMore(true);
+        try {
+            await fetchHistory({ reset: false, off: offset });
+        } catch (e) {
+            console.error('Load more failed', e);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
 
     const handleDelete = async (id, e) => {
         e.stopPropagation();
@@ -175,6 +196,13 @@ const DelegationHistory = () => {
                     </table>
                 </div>
             )}
+                    {tasks.length >= limit && (
+                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+                            <button onClick={loadMore} className="btn-secondary" disabled={loadingMore}>
+                                {loadingMore ? 'Memuat...' : 'Muat Lagi'}
+                            </button>
+                        </div>
+                    )}
         </div>
     );
 };

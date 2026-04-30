@@ -80,6 +80,23 @@ export const initializeDatabase = async () => {
       );
     `;
 
+    await sql`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id),
+        message TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `;
+
+    // Add helpful indexes
+    await sql`CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to_user ON tasks (assigned_to_user_id);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to_dept ON tasks (assigned_to_dept);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks (created_at DESC);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications (user_id);`;
+
     const roleCount = await sql`SELECT count(*) FROM roles`;
     if (parseInt(roleCount[0].count, 10) === 0) {
       await sql`

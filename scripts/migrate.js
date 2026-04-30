@@ -113,6 +113,26 @@ async function migrate() {
   `;
   console.log('✅  Table: task_logs ready');
 
+  // Notifications table
+  await sql`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY,
+      task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      message TEXT NOT NULL,
+      is_read BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+  console.log('✅  Table: notifications ready');
+
+  // Create indexes
+  await sql`CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to_user ON tasks (assigned_to_user_id);`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to_dept ON tasks (assigned_to_dept);`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks (created_at DESC);`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications (user_id);`;
+  console.log('✅  Indexes created');
+
   // --- Seed default roles ---
   const roleCount = await sql`SELECT count(*) as count FROM roles`;
   if (parseInt(roleCount[0].count, 10) === 0) {

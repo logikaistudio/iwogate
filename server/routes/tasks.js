@@ -1,4 +1,5 @@
 import { sql } from '../lib/db.js';
+import { triggerNotification } from '../lib/pusher.js';
 
 const formatTask = (task) => ({
   ...task,
@@ -84,31 +85,61 @@ export const setupTaskRoutes = (app) => {
   app.get('/api/tasks', async (req, res) => {
     try {
       const user = req.user;
-      const allTasks = await loadTasks();
-      let filtered = allTasks;
 
-      if (!isPrivilegedUser(user.role)) {
-        filtered = filtered.filter((task) => canAccessTask(task, user.id, user.role, user.department));
+      // Pagination
+      const limit = Math.min(parseInt(req.query.limit || '100', 10) || 100, 1000);
+      const offset = parseInt(req.query.offset || '0', 10) || 0;
+
+      // Build base filters from query params
+      const typeFilter = req.query.type || null;
+      const statusFilter = req.query.status || null;
+      const search = req.query.search ? `%${req.query.search.toLowerCase()}%` : null;
+
+      // Privileged users see all tasks (but can still apply filters)
+      if (isPrivilegedUser(user.role)) {
+        const tasks = await sql`
+          SELECT
+            t.*,
+            u.name AS assigned_by_name,
+            u.department AS assigned_by_dept,
+            au.name AS assigned_to_name,
+            au.department AS assigned_to_dept
+          FROM tasks t
+          LEFT JOIN users u ON t.assigned_by_user_id = u.id
+          LEFT JOIN users au ON t.assigned_to_user_id = au.id
+          WHERE (${typeFilter ? sql`${typeFilter}` : sql`TRUE`} IS TRUE) 
+            AND (${statusFilter ? sql`${statusFilter}` : sql`TRUE`} IS TRUE)
+            ${search ? sql`AND (LOWER(t.title) LIKE ${search} OR LOWER(t.description) LIKE ${search} OR LOWER(COALESCE(au.name, au.department, '')) LIKE ${search})` : sql``}
+          ORDER BY t.created_at DESC
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+        return res.json({ tasks: tasks.map(formatTask) });
       }
 
-      if (req.query.type) {
-        filtered = filtered.filter((task) => task.type === req.query.type);
-      }
-      if (req.query.status) {
-        filtered = filtered.filter((task) => task.status === req.query.status);
-      }
-      if (req.query.search) {
-        const search = req.query.search.toLowerCase();
-        filtered = filtered.filter(
-          (task) =>
-            task.title.toLowerCase().includes(search) ||
-            task.description.toLowerCase().includes(search) ||
-            (task.assigned_to_name || task.assigned_to_dept || '')
-              .toLowerCase()
-              .includes(search)
-        );
-      }
-      return res.json({ tasks: filtered });
+      // Non-privileged: restrict by assigned_by, assigned_to, or assigned_to_dept
+      const tasks = await sql`
+        SELECT
+          t.*,
+          u.name AS assigned_by_name,
+          u.department AS assigned_by_dept,
+          au.name AS assigned_to_name,
+          au.department AS assigned_to_dept
+        FROM tasks t
+        LEFT JOIN users u ON t.assigned_by_user_id = u.id
+        LEFT JOIN users au ON t.assigned_to_user_id = au.id
+        WHERE (
+          t.assigned_by_user_id = ${user.id}
+          OR t.assigned_to_user_id = ${user.id}
+          OR (t.assigned_to_user_id IS NULL AND t.assigned_to_dept = ${user.department})
+        )
+        ${typeFilter ? sql`AND t.type = ${typeFilter}` : sql``}
+        ${statusFilter ? sql`AND t.status = ${statusFilter}` : sql``}
+        ${search ? sql`AND (LOWER(t.title) LIKE ${search} OR LOWER(t.description) LIKE ${search} OR LOWER(COALESCE(au.name, au.department, '')) LIKE ${search})` : sql``}
+        ORDER BY t.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+
+      return res.json({ tasks: tasks.map(formatTask) });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ message: 'Gagal memuat tugas.' });
@@ -142,6 +173,13 @@ export const setupTaskRoutes = (app) => {
       for (const row of tasks) {
         if (!row.title || !row.assigned_to_dept || !row.due_date) {
           continue;
+        }
+        // Validate assigned_to_user_id if provided
+        if (row.assigned_to_user_id) {
+          const [targetUser] = await sql`SELECT id FROM users WHERE id = ${row.assigned_to_user_id} LIMIT 1`;
+          if (!targetUser) {
+            return res.status(400).json({ message: `Penerima delegasi tidak ditemukan (id: ${row.assigned_to_user_id})` });
+          }
         }
         const [newTask] = await sql`
           INSERT INTO tasks (
@@ -179,6 +217,15 @@ export const setupTaskRoutes = (app) => {
             `;
           }
         }
+        // create notification for assigned user if present
+        if (newTask && newTask.assigned_to_user_id) {
+          const message = `Anda menerima tugas: ${newTask.title}`;
+          const [notif] = await sql`
+            INSERT INTO notifications (task_id, user_id, message)
+            VALUES (${newTask.id}, ${newTask.assigned_to_user_id}, ${message}) RETURNING *
+          `;
+          try { await triggerNotification(newTask.assigned_to_user_id, notif); } catch (e) { /* ignore */ }
+        }
         created.push(newTask);
       }
       return res.json({ tasks: created });
@@ -201,6 +248,36 @@ export const setupTaskRoutes = (app) => {
     } catch (err) {
       console.error(err);
       return res.status(500).json({ message: 'Gagal menghapus tugas.' });
+    }
+  });
+
+  // Notifications endpoints
+  app.get('/api/notifications', async (req, res) => {
+    try {
+      const user = req.user;
+      const notes = await sql`
+        SELECT n.*, u.name AS from_user_name
+        FROM notifications n
+        LEFT JOIN users u ON n.user_id = u.id
+        WHERE n.user_id = ${user.id}
+        ORDER BY n.created_at DESC
+        LIMIT 200
+      `;
+      return res.json({ notifications: notes });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: 'Gagal memuat notifikasi.' });
+    }
+  });
+
+  app.post('/api/notifications/:id/read', async (req, res) => {
+    try {
+      const user = req.user;
+      await sql`UPDATE notifications SET is_read = true WHERE id = ${req.params.id} AND user_id = ${user.id}`;
+      return res.json({ message: 'Notification marked as read' });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: 'Gagal menandai notifikasi.' });
     }
   });
 
@@ -228,10 +305,16 @@ export const setupTaskRoutes = (app) => {
           SET assigned_to_user_id = ${targetUserId}, assigned_to_dept = ${target.department}, assigned_by_user_id = ${user.id}
           WHERE id = ${req.params.id}
         `;
-        await sql`
+        const [logRow] = await sql`
           INSERT INTO task_logs (task_id, user_id, action, note)
-          VALUES (${req.params.id}, ${user.id}, 'delegated', ${`Mendelegasikan ke ${target.name}. Catatan: ${reason || ''}`})
+          VALUES (${req.params.id}, ${user.id}, 'delegated', ${`Mendelegasikan ke ${target.name}. Catatan: ${reason || ''}`}) RETURNING *
         `;
+        // create notification for the new assignee
+        const [notifRow] = await sql`
+          INSERT INTO notifications (task_id, user_id, message)
+          VALUES (${req.params.id}, ${targetUserId}, ${`Tugas telah didelegasikan kepada Anda oleh ${user.id}`}) RETURNING *
+        `;
+        try { await triggerNotification(targetUserId, notifRow); } catch (e) { /* ignore */ }
         return res.json({ message: 'Tugas berhasil didelegasikan.' });
       }
 
@@ -242,10 +325,22 @@ export const setupTaskRoutes = (app) => {
         SET status = ${status}, outcome = ${reason || null}
         WHERE id = ${req.params.id}
       `;
-      await sql`
+      const [logRow2] = await sql`
         INSERT INTO task_logs (task_id, user_id, action, note)
-        VALUES (${req.params.id}, ${user.id}, ${action}, ${reason || null})
+        VALUES (${req.params.id}, ${user.id}, ${action}, ${reason || null}) RETURNING *
       `;
+      // notify task owner/assignee of status change
+      const [taskAfter] = await sql`SELECT * FROM tasks WHERE id = ${req.params.id} LIMIT 1`;
+      if (taskAfter) {
+        const notifyUser = taskAfter.assigned_to_user_id || taskAfter.assigned_by_user_id;
+        if (notifyUser) {
+          const [notifRow2] = await sql`
+            INSERT INTO notifications (task_id, user_id, message)
+            VALUES (${req.params.id}, ${notifyUser}, ${`Status tugas berubah menjadi ${status}`}) RETURNING *
+          `;
+          try { await triggerNotification(notifyUser, notifRow2); } catch (e) { /* ignore */ }
+        }
+      }
       return res.json({ message: 'Tugas berhasil diperbarui.' });
     } catch (err) {
       console.error(err);
