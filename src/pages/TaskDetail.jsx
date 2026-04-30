@@ -16,6 +16,9 @@ const TaskDetail = () => {
     // Action Modal State
     const [modal, setModal] = useState({ open: false, type: '', title: '' });
     const [reason, setReason] = useState(''); // Rejection reason or completion note
+    const [forwardNotes, setForwardNotes] = useState('');
+    const [forwardSelected, setForwardSelected] = useState('');
+    const [forwardUploading, setForwardUploading] = useState(false);
 
     // Delegation State
     const [users, setUsers] = useState([]);
@@ -112,6 +115,45 @@ const TaskDetail = () => {
             alert('Gagal memproses aksi.');
         } finally {
             setUpdating(false);
+            setModal({ open: false, type: '', title: '' });
+        }
+    };
+
+    const handleForwardSubmit = async () => {
+        if (!forwardSelected) return alert('Pilih penerima (pimpinan).');
+        setForwardUploading(true);
+        try {
+            // prepare summary PDF and upload it
+            const generate = window.confirm('Generate ringkasan PDF otomatis dan lampirkan? Tekan Cancel jika ingin upload manual.');
+            const attachmentsToSend = [];
+            if (generate) {
+                try {
+                    const { generateAssignmentPdf } = await import('../lib/pdf.js');
+                    const pdfBytes = await generateAssignmentPdf({ title: task.title, tasks: [{ title: task.title, assigned_to_dept: task.assigned_to_dept, due_date: task.dueDate }], sender: task.assignedBy, refNo: task.reference_no, docDate: task.document_date });
+                    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                    const fileName = `summary-${task.id}.pdf`;
+                    // presign
+                    const presignRes = await fetch('/api/uploads/presign', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(sessionStorage.getItem('iwogate_token') ? { Authorization: `Bearer ${sessionStorage.getItem('iwogate_token')}` } : {}) }, body: JSON.stringify({ fileName, contentType: 'application/pdf' }) });
+                    if (!presignRes.ok) throw new Error('Presign failed');
+                    const presign = await presignRes.json();
+                    await fetch(presign.url, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: blob });
+                    attachmentsToSend.push({ name: fileName, url: presign.publicUrl, storage_key: presign.key, type: 'application/pdf', size: blob.size, is_summary: true });
+                } catch (e) {
+                    console.error('Generate/upload summary failed', e);
+                }
+            }
+
+            // call forward endpoint
+            const body = { assigned_to_user_id: forwardSelected, notes: forwardNotes, attachments: attachmentsToSend };
+            const res = await fetch(`/api/tasks/${task.id}/forward`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(sessionStorage.getItem('iwogate_token') ? { Authorization: `Bearer ${sessionStorage.getItem('iwogate_token')}` } : {}) }, body: JSON.stringify(body) });
+            if (!res.ok) throw new Error('Forward failed');
+            alert('Tugas berhasil diteruskan.');
+            window.location.reload();
+        } catch (e) {
+            console.error(e);
+            alert('Gagal meneruskan tugas.');
+        } finally {
+            setForwardUploading(false);
             setModal({ open: false, type: '', title: '' });
         }
     };
@@ -214,6 +256,12 @@ const TaskDetail = () => {
             {/* Action Bar */}
             {!modal.open && task.status !== 'Completed' && task.status !== 'Rejected' && (
                 <div className="action-bar saved-safe-area flex">
+                        {/* Forward button for secretaries or original assigner */}
+                        {(currentUser?.id === task.assigned_by_user_id || ['secretary','staf','staff'].includes((currentUser?.role || '').toLowerCase())) && (
+                            <button onClick={() => setModal({ open: true, type: 'forward', title: 'Teruskan ke Pimpinan' })} className="action-btn btn-forward text-sm">
+                                <ArrowRightCircle size={18} /> Teruskan
+                            </button>
+                        )}
                     <button onClick={() => openModal('reject')} className="action-btn btn-reject text-sm">
                         <XCircle size={18} /> Tolak
                     </button>
@@ -245,6 +293,29 @@ const TaskDetail = () => {
                                         <option key={u.id} value={u.id}>{u.name} ({u.department})</option>
                                     ))}
                                 </select>
+                            </div>
+                        ) : null}
+
+                        {modal.type === 'forward' ? (
+                            <div>
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium mb-1">Pilih Pimpinan</label>
+                                    <select className="w-full p-2 border rounded-lg" value={forwardSelected} onChange={(e) => setForwardSelected(e.target.value)}>
+                                        <option value="">-- Pilih Pimpinan --</option>
+                                        {users.map(u => (
+                                            <option key={u.id} value={u.id}>{u.name} ({u.role || u.department})</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium mb-1">Catatan / Instruksi (Opsional)</label>
+                                    <textarea className="w-full p-3 border rounded-lg h-24" value={forwardNotes} onChange={(e) => setForwardNotes(e.target.value)} placeholder="Catatan untuk pimpinan..."></textarea>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setModal({ open: false, type: '', title: '' })} className="flex-1 py-2 rounded-lg border border-slate-300 font-medium hover:bg-slate-50 transition-colors">Batal</button>
+                                    <button onClick={handleForwardSubmit} disabled={forwardUploading} className="flex-1 py-2 rounded-lg font-medium text-white bg-primary hover:bg-blue-700">{forwardUploading ? 'Mengirim...' : 'Teruskan ke Pimpinan'}</button>
+                                </div>
                             </div>
                         ) : null}
 

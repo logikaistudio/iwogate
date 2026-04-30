@@ -347,4 +347,61 @@ export const setupTaskRoutes = (app) => {
       return res.status(500).json({ message: 'Gagal memproses aksi tugas.' });
     }
   });
+
+  // Forward / Teruskan surat (secretary -> boss) with optional summary attachments
+  app.post('/api/tasks/:id/forward', async (req, res) => {
+    try {
+      const user = req.user;
+      const { assigned_to_user_id, notes, attachments } = req.body;
+      if (!assigned_to_user_id) return res.status(400).json({ message: 'assigned_to_user_id required' });
+
+      const task = await loadTask(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Tugas tidak ditemukan.' });
+
+      // allow if user is the assigned_by or has secretary role
+      const roleRaw = (user.role || '').toLowerCase();
+      const normalizedRole = roleRaw === 'staf' ? 'staff' : roleRaw;
+      const allowedToForward = user.id === task.assigned_by_user_id || normalizedRole === 'secretary' || normalizedRole === 'staff';
+      if (!allowedToForward) return res.status(403).json({ message: 'Tidak diizinkan meneruskan tugas.' });
+
+      const [target] = await sql`SELECT * FROM users WHERE id = ${assigned_to_user_id} LIMIT 1`;
+      if (!target) return res.status(400).json({ message: 'Penerima tidak ditemukan.' });
+
+      // Update task assignment
+      await sql`
+        UPDATE tasks
+        SET assigned_to_user_id = ${assigned_to_user_id}, assigned_to_dept = ${target.department}, assigned_by_user_id = ${user.id}, status = 'Forwarded'
+        WHERE id = ${req.params.id}
+      `;
+
+      // Insert attachments (summaries) if provided
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        for (const att of attachments) {
+          await sql`
+            INSERT INTO attachments (task_id, file_name, file_type, file_size, file_url, storage_key, is_summary, uploaded_by)
+            VALUES (${req.params.id}, ${att.name}, ${att.type || null}, ${att.size || null}, ${att.url}, ${att.storage_key || null}, ${att.is_summary ? true : false}, ${user.id})
+          `;
+        }
+      }
+
+      // log the forward action
+      const [logRow] = await sql`
+        INSERT INTO task_logs (task_id, user_id, action, note)
+        VALUES (${req.params.id}, ${user.id}, 'forwarded', ${notes || null}) RETURNING *
+      `;
+
+      // create notification for the assignee
+      const message = `Anda menerima surat/penugasan: ${task.title}`;
+      const [notif] = await sql`
+        INSERT INTO notifications (task_id, user_id, message)
+        VALUES (${req.params.id}, ${assigned_to_user_id}, ${message}) RETURNING *
+      `;
+      try { await triggerNotification(assigned_to_user_id, notif); } catch (e) { /* ignore */ }
+
+      return res.json({ message: 'Tugas berhasil diteruskan.' });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: 'Gagal meneruskan tugas.' });
+    }
+  });
 };

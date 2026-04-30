@@ -98,3 +98,9 @@ export const createTasks = (payload) =>
 export const deleteTask = (id) => request(`/tasks/${id}`, { method: 'DELETE' });
 export const taskAction = (id, payload) =>
   request(`/tasks/${id}/action`, { method: 'POST', body: JSON.stringify(payload) });
+
+export const presignUpload = (fileName, contentType) =>
+  request('/uploads/presign', { method: 'POST', body: JSON.stringify({ fileName, contentType }) });
+
+export const forwardTask = (id, payload) =>
+  request(`/tasks/${id}/forward`, { method: 'POST', body: JSON.stringify(payload) });
